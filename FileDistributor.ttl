@@ -1,0 +1,98 @@
+;===========================================================
+; Description : File Distributor
+; Author      : Obayashi
+;===========================================================
+SERVERS_LIST  = 'C:\work\servers.lst'
+FILES_LIST    = 'C:\work\files.lst'
+PASSWORD_FILE = 'C:\work\possword.dat'
+SEPARATOR     = ','
+;===========================================================
+
+;===========================================================
+; SERVER Connection Loop
+;===========================================================
+fileopen SFH SERVERS_LIST 0 1
+while 1
+  filereadln SFH SERVER_LINE
+  if result=1 then
+    break
+  endif
+
+  strsplit SERVER_LINE SEPARATOR
+  SERVER_IP = groupmatchstr1
+  SERVER_USER = groupmatchstr2
+
+  getpassword PASSWORD_FILE SERVER_USER SERVER_PASSWORD
+
+  CONNECT_CMD = '/V /I '
+  strconcat CONNECT_CMD SERVER_IP
+  strconcat CONNECT_CMD ':22 /ssh /2 /auth=password /user='
+  strconcat CONNECT_CMD SERVER_USER
+  strconcat CONNECT_CMD ' /passwd='
+  strconcat CONNECT_CMD SERVER_PASSWORD
+
+  connect CONNECT_CMD
+
+  ;; Connection Check
+  if result <> 2 then
+    messagebox 'Connection Error' 'Connection Error'
+    goto END
+  endif
+
+  ;; Wait 20 sec
+  timeout = 20
+  wait '$' '#'
+  if result = 0 then
+    messagebox 'Connection Timeout' 'Connection Error'
+    goto END
+  endif
+
+  call SCPSEND
+
+  sendln 'exit'
+  while 1
+      mpause 100
+      testlink
+      if result == 0 then
+        break
+      elseif result == 1 then
+        beeak
+      endif
+  endwhile
+endwhile
+;===========================================================
+; SERVER Connection Loop
+;===========================================================
+:END
+fileclose SFH
+end
+
+:SCPSEND
+;===========================================================
+; FILE Distribution Loop
+;===========================================================
+fileopen FFH FILES_LIST 0 1
+while 1
+  filereadln FFH FILE_LINE
+  if result=1 then
+    break;
+  endif
+
+  strsplit FILE_LINE SEPARATOR
+  SOURCE_FILE = groupmatchstr1
+  DEST_PATH = groupmatchstr2
+
+  ;; Send file
+  scpsend SOURCE_FILE DEST_PATH
+  do
+    mpause 1000
+    sendln 'ps -ef |grep -v grep |grep -c scp'
+    wait '0' '1'
+  loop while result != 1
+
+endwhile
+;===========================================================
+; FILE Distribution Loop End
+;===========================================================
+fileclose FFH
+return
